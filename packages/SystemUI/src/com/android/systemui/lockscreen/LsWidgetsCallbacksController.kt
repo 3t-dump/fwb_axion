@@ -26,14 +26,7 @@ class LsWidgetsCallbacksController(private val controller: LockScreenWidgetsCont
 
     private val wifiCallbackInfo = WifiCallbackInfo()
 
-    val configurationListener = object : ConfigurationController.ConfigurationListener {
-        override fun onUiModeChanged() {
-            controller.updateWidgetViews()
-        }
-        override fun onThemeChanged() {
-            controller.updateWidgetViews()
-        }
-    }
+    val wifiInfo: WifiCallbackInfo get() = wifiCallbackInfo
 
     val scrimUtils = object : ScrimUtils.ScrimEventListener {
         override fun onDozingChanged() {
@@ -100,13 +93,11 @@ class LsWidgetsCallbacksController(private val controller: LockScreenWidgetsCont
                 controller.states.updateWiFi(false)
                 return
             }
-            wifiCallbackInfo.enabled = indicators.enabled
-            wifiCallbackInfo.ssid = indicators.description
-            controller.states.updateWiFi(wifiCallbackInfo.enabled)
+            wifiInfo.enabled = indicators.enabled
+            wifiInfo.ssid = indicators.description
+            controller.states.updateWiFi(wifiInfo.enabled)
         }
     }
-
-    fun getWifiCallbackInfo(): WifiCallbackInfo = wifiCallbackInfo
 
     class WifiCallbackInfo {
         var enabled = false

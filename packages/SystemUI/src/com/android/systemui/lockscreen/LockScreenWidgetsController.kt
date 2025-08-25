@@ -53,8 +53,6 @@ class LockScreenWidgetsController(
     val states = WidgetStates(this)
     val widgetFactory = WidgetFactory(context, this)
 
-    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var widgetFlowJob: Job? = null
     private var listening = false
 
     private var currentSettings: WidgetSettings? = null
@@ -67,6 +65,9 @@ class LockScreenWidgetsController(
 
     val listeners = mutableMapOf<String, () -> Unit>()
     val callbacks = LsWidgetsCallbacksController(this)
+    
+    val scrimUtils get() = ScrimUtils.get()
+    val bluetoothEnabled get() = BluetoothAdapter.getDefaultAdapter()?.isEnabled == true
 
     private var mainWidgets = mutableListOf<WidgetAction>()
     val widgetButtons = mutableMapOf<WidgetAction, LaunchableImageView>()
@@ -76,14 +77,13 @@ class LockScreenWidgetsController(
         runCatching {
             cameraId = cameraManager.cameraIdList.firstOrNull()
         }
-        ScrimUtils.get().addListener(callbacks.scrimUtils)
+        scrimUtils.addListener(callbacks.scrimUtils)
         startListening()
     }
 
     fun dispose() {
         stopListening()
-        ScrimUtils.get().removeListener(callbacks.scrimUtils)
-        scope.cancel()
+        scrimUtils.removeListener(callbacks.scrimUtils)
     }
 
     private fun addListener(key: String, register: () -> Unit, unregister: () -> Unit) {
@@ -92,34 +92,26 @@ class LockScreenWidgetsController(
     }
 
     fun startListening() {
-        if (widgetFlowJob != null) return
-        widgetFlowJob = scope.launch {
-            widgetSettingsRepository.widgetSettingsFlow.collectLatest { settings ->
-                currentSettings = settings
-                updateWidgetViews()
-                val shouldEnableListeners = settings.isEnabled && widgetList.isNotEmpty()
-                if (shouldEnableListeners && !listening) {
-                    addListeners()
-                } else if (!shouldEnableListeners && listening) {
-                    cancelListeners()
-                }
-            }
+        if (listening) return
+        val settings = widgetSettingsRepository.settings
+        if (settings != currentSettings) {
+            currentSettings = settings
+            updateWidgetViews()
+        }
+        val shouldEnableListeners = currentSettings?.isEnabled == true && widgetList.isNotEmpty()
+        if (shouldEnableListeners) {
+            addListeners()
+        } else {
+            cancelListeners()
         }
     }
 
     fun stopListening() {
-        widgetFlowJob?.cancel()
-        widgetFlowJob = null
         cancelListeners()
     }
 
     private fun addListeners() {
         if (listening) return
-        addListener(
-            key = "configurationListener",
-            register = { configurationController.addCallback(callbacks.configurationListener) },
-            unregister = { configurationController.removeCallback(callbacks.configurationListener) }
-        )
         widgetList.forEach { widget ->
             widget.registerCallback(this)
             listeners["widget_${widget.name}"] = {
@@ -183,17 +175,14 @@ class LockScreenWidgetsController(
             detailsContentViewModel.get().showDialog(Expandable.fromView(view))
         }
     }
-
-    fun isBluetoothEnabled() = BluetoothAdapter.getDefaultAdapter()?.isEnabled == true
     
     fun maybeKeyguardDismiss(dismiss: Boolean) {
         if (dismiss) {
             stopListening()
         } else {
-            scope.launch {
-                delay(500)
+            view.postDelayed({
                 startListening()
-            }
+            }, 500)
         }
     }
 }

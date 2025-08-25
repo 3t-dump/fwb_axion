@@ -30,10 +30,10 @@ class WidgetFactory(
     private val context: Context,
     private val controller: LockScreenWidgetsController
 ) {
-    private val darkColor = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_DARK)
-    private val lightColor = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_LIGHT)
-    private val darkColorActive = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_ADARK)
-    private val lightColorActive = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_ALIGHT)
+    private val darkColor get() = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_DARK)
+    private val lightColor get() = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_LIGHT)
+    private val darkColorActive get() = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_ADARK)
+    private val lightColorActive get() = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_ALIGHT)
 
     private fun isNightMode(): Boolean =
         (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==

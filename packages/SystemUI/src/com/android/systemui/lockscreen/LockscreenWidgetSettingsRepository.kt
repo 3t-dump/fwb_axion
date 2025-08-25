@@ -17,10 +17,12 @@ package com.android.systemui.lockscreen
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.res.Configuration
 import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.os.UserHandle
+import androidx.core.content.ContextCompat
 import android.provider.Settings
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
@@ -28,51 +30,39 @@ import kotlinx.coroutines.Dispatchers
 
 data class WidgetSettings(
     val settings: String,
-    val isEnabled: Boolean
+    val isEnabled: Boolean,
+    val isNight: Boolean,
+    val theme: Int
 )
 
 class LockscreenWidgetSettingsRepository(
-    context: Context
+    private val context: Context
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
 
-    val widgetSettingsFlow: Flow<WidgetSettings> = callbackFlow {
-        val handler = Handler(Looper.getMainLooper())
-
-        val observer = object : ContentObserver(handler) {
-            override fun onChange(selfChange: Boolean) {
-                trySend(getCurrentSettings())
-            }
-        }
-
-        val extrasUri = Settings.System.getUriFor("lockscreen_widgets_extras")
-        val enabledUri = Settings.System.getUriFor("lockscreen_widgets_enabled")
-
-        contentResolver.registerContentObserver(extrasUri, false, observer, UserHandle.USER_CURRENT)
-        contentResolver.registerContentObserver(enabledUri, false, observer, UserHandle.USER_CURRENT)
-
-        trySend(getCurrentSettings())
-
-        awaitClose {
-            contentResolver.unregisterContentObserver(observer)
-        }
-    }
-    .distinctUntilChanged()
-    .debounce(500)
-    .flowOn(Dispatchers.IO)
-
-    private fun getCurrentSettings(): WidgetSettings {
+    val settings: WidgetSettings get() {
         val settings = Settings.System.getStringForUser(
             contentResolver,
             "lockscreen_widgets_extras",
             UserHandle.USER_CURRENT
         ) ?: ""
+
         val isEnabled = Settings.System.getIntForUser(
             contentResolver,
             "lockscreen_widgets_enabled",
             0,
             UserHandle.USER_CURRENT
         ) == 1
-        return WidgetSettings(settings, isEnabled)
+
+        val isNight = (context.resources.configuration.uiMode and
+                Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+
+        val darkColorActive = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_ADARK)
+        val lightColorActive = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_ALIGHT)
+
+        val theme = 31 * darkColorActive + lightColorActive
+
+        return WidgetSettings(settings, isEnabled, isNight, theme)
     }
 }

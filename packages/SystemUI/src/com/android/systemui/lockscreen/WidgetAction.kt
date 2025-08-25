@@ -32,7 +32,7 @@ enum class WidgetAction(
     WIFI(
         LsWidgetsRes.WIFI_ACTIVE, LsWidgetsRes.WIFI_INACTIVE,
         onClick = onClickLambda@{
-            val enabled = !it.callbacks.getWifiCallbackInfo().enabled
+            val enabled = !it.callbacks.wifiInfo.enabled
             it.networkController.setWifiEnabled(enabled)
             it.widgetFactory.updateWidgetState(it.widgetButtons[WIFI] ?: return@onClickLambda, WIFI, enabled)
         },
@@ -75,7 +75,7 @@ enum class WidgetAction(
     BT(
         LsWidgetsRes.BT_ACTIVE, LsWidgetsRes.BT_INACTIVE,
         onClick = onClickLambda@{
-            val enabled = !it.isBluetoothEnabled()
+            val enabled = !it.bluetoothEnabled
             it.bluetoothController.setBluetoothEnabled(enabled)
             it.widgetFactory.updateWidgetState(it.widgetButtons[BT] ?: return@onClickLambda, BT, enabled)
         },
