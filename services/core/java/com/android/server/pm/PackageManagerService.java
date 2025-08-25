@@ -2515,6 +2515,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
             mDexManager.load(userPackages);
             mDynamicCodeLogger.load(userPackages);
             if (mIsUpgrade) {
+                deleteResourceCache();
                 FrameworkStatsLog.write(
                         FrameworkStatsLog.BOOT_TIME_EVENT_DURATION_REPORTED,
                         BOOT_TIME_EVENT_DURATION__EVENT__OTA_PACKAGE_MANAGER_INIT_TIME,
@@ -2576,6 +2577,14 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
         mServiceStartWithDelay = SystemClock.uptimeMillis() + (60 * 1000L);
 
         Slog.i(TAG, "Fix for b/169414761 is applied");
+    }
+    
+    private void deleteResourceCache() {
+        final File rdir = new File("/data/resource-cache");
+        final File cdir = Environment.getPackageCacheDirectory();
+        FileUtils.deleteContents(rdir);
+        FileUtils.deleteContents(cdir);
+        Log.i(TAG, "Resource cache deleted for upgrade stability");
     }
 
     @GuardedBy("mLock")
