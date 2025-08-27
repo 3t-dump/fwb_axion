@@ -36,6 +36,7 @@ class LsWidgetsCallbacksController(private val controller: LockScreenWidgetsCont
             }
         }
         override fun onKeyguardShowingChanged(showing: Boolean) {
+            controller.updateSettings()
             if (showing) {
                 controller.startListening()
             } else {
@@ -43,9 +44,11 @@ class LsWidgetsCallbacksController(private val controller: LockScreenWidgetsCont
             }
         }
         override fun onScreenTurnedOff() {
+            controller.updateSettings()
             controller.stopListening()
         }
         override fun onStartedWakingUp() {
+            controller.updateSettings()
             controller.startListening()
         }
         override fun onPrimaryBouncerShowingChanged(showing: Boolean) {

@@ -67,4 +67,13 @@ class WidgetStates(
             else -> false
         }
     }
+    
+    fun refresh() {
+        updateTorch()
+        updateRinger()
+        updateBluetooth()
+        updateWiFi(controller.callbacks.wifiInfo.enabled)
+        updateMobileData(controller.networkController.mobileDataController.isMobileDataEnabled)
+        updateHotspot()
+    }
 }

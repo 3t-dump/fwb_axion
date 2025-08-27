@@ -90,17 +90,21 @@ class LockScreenWidgetsController(
         register()
         listeners[key] = unregister
     }
-
-    fun startListening() {
-        if (listening) return
+    
+    fun updateSettings() {
         val settings = widgetSettingsRepository.settings
         if (settings != currentSettings) {
             currentSettings = settings
             updateWidgetViews()
         }
+    }
+
+    fun startListening() {
+        if (listening) return
         val shouldEnableListeners = currentSettings?.isEnabled == true && widgetList.isNotEmpty()
         if (shouldEnableListeners) {
             addListeners()
+            states.refresh()
         } else {
             cancelListeners()
         }
