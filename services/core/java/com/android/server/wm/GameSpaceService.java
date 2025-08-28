@@ -64,6 +64,14 @@ public class GameSpaceService extends IGameSpaceService.Stub implements IWindowE
         this.mPackageHandler = new PackageHandler(context, mGameListManager);
         this.mActivityManager = am;
         mGameListManager.registerGameListObserver();
+        mGameListManager.addListener(() -> {
+            synchronized (mLock) {
+                if (mCurrentGame != null && mGameListManager.isGame(mCurrentGame)) {
+                    boolean inPerfMode = mGameListManager.isGameInPerfMode(mCurrentGame);
+                    mBackgroundExecutor.execute(() -> mGameStateDispatcher.boostGame(inPerfMode));
+                }
+            }
+        });
         mPackageHandler.registerPackageReceiver();
     }
 

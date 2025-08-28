@@ -26,7 +26,13 @@ import android.util.Slog;
 import java.util.*;
 
 class GameListManager {
+
+    interface GameListChangeListener {
+        void onGameListChanged();
+    }
+
     private static final String GAME_LIST_KEY = "gamespace_game_list";
+    private final List<GameListChangeListener> mListeners = new ArrayList<>();
 
     private final Context mContext;
     private final Map<String, String> mGameList = Collections.synchronizedMap(new HashMap<>());
@@ -44,6 +50,7 @@ class GameListManager {
             mGameList.clear();
             mGameList.putAll(parsed);
         }
+        notifyListeners();
     }
 
     boolean isGame(String packageName) {
@@ -90,6 +97,7 @@ class GameListManager {
                 if (add) mGameList.put(packageName, "2");
                 else mGameList.remove(packageName);
             }
+            notifyListeners();
         }
     }
 
@@ -130,4 +138,25 @@ class GameListManager {
         }
         return String.join(";", entries);
     }
+
+    void addListener(GameListChangeListener listener) {
+        synchronized (mListeners) {
+            mListeners.add(listener);
+        }
+    }
+
+    void removeListener(GameListChangeListener listener) {
+        synchronized (mListeners) {
+            mListeners.remove(listener);
+        }
+    }
+
+    private void notifyListeners() {
+        synchronized (mListeners) {
+            for (GameListChangeListener listener : mListeners) {
+                listener.onGameListChanged();
+            }
+        }
+    }
+
 }
