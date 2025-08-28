@@ -1262,7 +1262,7 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
                 /* hasPermission= */ true, mDisplayId);
         mAppCompatCameraPolicy.start();
         if (isDefaultDisplay) {
-            NtRefreshRateController.get().init(mWmService.mContext, mDisplayInfo, mWmService);
+            NtRefreshRateController.get().init(mWmService.mContext, mWmService);
         }
     }
 

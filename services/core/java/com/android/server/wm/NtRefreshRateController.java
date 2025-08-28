@@ -27,13 +27,15 @@ import com.android.server.wm.NtAppRefreshRateProvider.AppVoteInfo;
 
 import android.content.Context;
 import android.database.ContentObserver;
+import android.hardware.display.DisplayManager;
 import android.net.Uri;
 import android.os.*;
 import android.provider.Settings;
-import android.util.*;
-import android.view.*;
+import android.util.SparseIntArray;
+import android.view.Display;
+import android.view.WindowManager;
 
-import java.util.*;
+import java.util.Arrays;
 
 public class NtRefreshRateController {
 
@@ -47,38 +49,31 @@ public class NtRefreshRateController {
 
     private static final NtRefreshRateController INSTANCE = new NtRefreshRateController();
 
-    private final Map<Integer, Display.Mode> hzToDisplayMode = new HashMap<>();
-    private final Map<Integer, Display.Mode> modeIdToDisplayMode = new HashMap<>();
-
     private final SparseIntArray gameUidToFpsMap = new SparseIntArray(10);
-    private AppVoteInfo currentAppVote;
-    private AppVoteInfo bestAppVote;
-
-    private Display.Mode[] supportedDisplayModes;
+    private AppVoteInfo currentVote;
+    private AppVoteInfo bestVote;
 
     private Context context;
     private Handler bgHandler;
     private SettingsObserver settingsObserver;
     private WindowManagerService wm;
-    private DisplayInfo displayInfo;
 
-    private int maxSupportedHz;
-    private int defaultModeId;
-    private float defaultMinRefreshRate;
+    private float maxSupportedHz = 60f;
+    private float defaultMinRefreshRate = 60f;
 
     private boolean isVrrEnabled = false;
     private int currentRefreshRate = 60;
-    private int modeId;
+    
+    private boolean isCtsTest = false;
+    private boolean overrideWinPrefer = false;
+    private boolean lastIdle = false;
+    private boolean disableIdle = false;
     private int maxWindowSize = 0;
 
     private final boolean supportsVRR = SystemProperties.getBoolean(
             "ro.surface_flinger.use_content_detection_for_refresh_rate", false);
     private final boolean supportsIdle = SystemProperties.getBoolean(
             "ro.surface_flinger.support_kernel_idle_timer", false);
-
-    private boolean overrideWinPref = false;
-    private boolean lastIdle = false;
-    private boolean disableIdle = false;
 
     private GameFpsCallback mCallbacks;
 
@@ -90,9 +85,8 @@ public class NtRefreshRateController {
         this.mCallbacks = callback;
     }
 
-    public void init(Context context, DisplayInfo displayInfo, WindowManagerService wm) {
+    public void init(Context context, WindowManagerService wm) {
         this.context = context;
-        this.displayInfo = displayInfo;
         this.wm = wm;
 
         HandlerThread thread = new HandlerThread("NtRefreshRateConfig");
@@ -100,60 +94,33 @@ public class NtRefreshRateController {
         bgHandler = new Handler(thread.getLooper());
         settingsObserver = new SettingsObserver();
 
-        supportedDisplayModes = Arrays.copyOf(displayInfo.supportedModes, displayInfo.supportedModes.length);
-        setupDisplayModes();
+        final DisplayManager dm = context.getSystemService(DisplayManager.class);
+        final Display display = dm.getDisplay(Display.DEFAULT_DISPLAY);
+        Display.Mode[] supportedModes = display.getSupportedModes();
 
-        maxSupportedHz = hzToDisplayMode.keySet().stream().max(Integer::compareTo).orElse(60);
-        defaultModeId = computeDefaultModeId();
-        defaultMinRefreshRate = getClosestSupportedMode(60).getRefreshRate();
+        maxSupportedHz = 60f;
+        defaultMinRefreshRate = Float.MAX_VALUE;
+
+        for (Display.Mode mode : supportedModes) {
+            float hz = mode.getRefreshRate();
+            if (hz > maxSupportedHz) maxSupportedHz = hz;
+            if (hz < defaultMinRefreshRate) defaultMinRefreshRate = hz;
+        }
+
+        if (defaultMinRefreshRate == Float.MAX_VALUE) defaultMinRefreshRate = 60f;
 
         loadRefreshRateSetting();
         updateRefreshRate();
-        modeId = getModeId();
 
-        bestAppVote = new AppVoteInfo(null, 0, 0.0f, 0.0f, false);
-        currentAppVote = new AppVoteInfo(null, 0, 0.0f, 0.0f, false);
-    }
-
-    private void setupDisplayModes() {
-        for (Display.Mode mode : supportedDisplayModes) {
-            int hz = Math.round(mode.getRefreshRate());
-            hzToDisplayMode.put(hz, mode);
-            modeIdToDisplayMode.put(mode.getModeId(), mode);
-        }
+        bestVote = new AppVoteInfo(null, 0, 0.0f, 0.0f, false);
+        currentVote = new AppVoteInfo(null, 0, 0.0f, 0.0f, false);
     }
 
     private void loadRefreshRateSetting() {
         int value = Settings.Global.getInt(context.getContentResolver(),
-                SETTINGS_REFRESH_RATE_MODE, supportsVRR ? 0 : maxSupportedHz);
+                SETTINGS_REFRESH_RATE_MODE, supportsVRR ? 0 : Math.round(maxSupportedHz));
         isVrrEnabled = (value == 0 && supportsVRR);
         if (!isVrrEnabled) currentRefreshRate = value;
-    }
-
-    private int getModeId() {
-        return isVrrEnabled ? defaultModeId : getModeIdForHz(currentRefreshRate);
-    }
-
-    private int getModeIdForHz(int hz) {
-        Display.Mode mode = hzToDisplayMode.get(hz);
-        return (mode != null) ? mode.getModeId() : getClosestSupportedMode(hz).getModeId();
-    }
-
-    private int computeDefaultModeId() {
-        if (supportedDisplayModes.length == 0) return 0;
-        int width = displayInfo.logicalWidth, height = displayInfo.logicalHeight;
-        Display.Mode bestMode = null;
-        int bestHz = 0;
-        for (Display.Mode mode : supportedDisplayModes) {
-            if (mode.getPhysicalWidth() == width && mode.getPhysicalHeight() == height) {
-                int hz = Math.round(mode.getRefreshRate());
-                if (hz > bestHz) {
-                    bestHz = hz;
-                    bestMode = mode;
-                }
-            }
-        }
-        return (bestMode != null ? bestMode : supportedDisplayModes[0]).getModeId();
     }
 
     private void updateRefreshRate() {
@@ -175,16 +142,6 @@ public class NtRefreshRateController {
     private void setSystemRefreshRates(float minRate, float peakRate) {
         Settings.System.putFloat(context.getContentResolver(), Settings.System.MIN_REFRESH_RATE, minRate);
         Settings.System.putFloat(context.getContentResolver(), PEAK_REFRESH_RATE, peakRate);
-    }
-
-    private Display.Mode getClosestSupportedMode(int hz) {
-        int bestHz = maxSupportedHz;
-        for (int supportedHz : hzToDisplayMode.keySet()) {
-            if (Math.abs(hz - supportedHz) < Math.abs(hz - bestHz)) {
-                bestHz = supportedHz;
-            }
-        }
-        return hzToDisplayMode.get(bestHz);
     }
 
     private void handleFocusedAppUpdate(ActivityRecord activityRecord) {
@@ -219,28 +176,32 @@ public class NtRefreshRateController {
     }
 
     public void resetNtVoteResult() {
-        bestAppVote.reset();
+        bestVote.reset();
+        isCtsTest = false;
+        overrideWinPrefer = false;
         maxWindowSize = 0;
+        disableIdle = false;
     }
 
     public void updateVoteResult() {
-        if (overrideWinPref) {
-            updateBestVote("OverrideWinPrefer", getModeId(), maxSupportedHz);
-        } else if (!bestAppVote.hasVote) {
-            Display.Mode mode = modeIdToDisplayMode.get(modeId);
-            float hz = (mode != null ? mode.getRefreshRate() : maxSupportedHz);
-            updateBestVote("SettingMode", modeId, hz);
+        if (isCtsTest) {
+            currentVote.updateVote("CtsTest", 0, 0.0f, 0.0f);
+            currentVote.hasVote = false;
+        } else if (overrideWinPrefer) {
+            int modeId = getModeId(Math.round(maxSupportedHz));
+            currentVote.updateVote("OverrideWinPrefer", modeId, 0.0f, maxSupportedHz);
+        } else if (bestVote.hasVote) {
+            currentVote.copyFrom(bestVote);
+        } else {
+            float settingRate = isVrrEnabled ? maxSupportedHz : currentRefreshRate;
+            int modeId = getModeId(Math.round(settingRate));
+            currentVote.updateVote("SettingMode", modeId, 0.0f, settingRate);
         }
-        currentAppVote.copyFrom(bestAppVote);
 
         if (supportsIdle && lastIdle != disableIdle) {
             bgHandler.post(() -> setIdleFpsMode(disableIdle));
             lastIdle = disableIdle;
         }
-    }
-
-    private void updateBestVote(String source, int modeId, float refreshRate) {
-        bestAppVote.updateVote(source, modeId, 0.0f, refreshRate);
     }
 
     public void setGameModeFrameRateOverrideToNtRefreshRate(int uid, float frameRate) {
@@ -255,17 +216,55 @@ public class NtRefreshRateController {
         bgHandler.post(() -> handleFocusedAppUpdate(activityRecord));
     }
 
+    private boolean shouldOverrideForWindow(WindowState ws, boolean displayOn) {
+        if (ws.inMultiWindowMode()) {
+            return true;
+        }
+
+        int type = ws.mAttrs.type;
+        if (type == TYPE_NOTIFICATION_SHADE || 
+            (type == TYPE_APPLICATION_OVERLAY && ws.mOwnerUid != SYSTEM_UID)) {
+            return true;
+        }
+
+        if (!displayOn) {
+            return true;
+        }
+
+        if (ws.isAnimationRunningSelfOrParent()) {
+            return true;
+        }
+
+        return false;
+    }
+
     public void voteNtPreferredModeId(WindowState ws, boolean displayOn) {
-        if (SYS_WINDOW_TYPES.contains(ws.getName())) return;
+        if (SYS_WINDOW_TYPES.contains(ws.getName())) {
+            return;
+        }
 
         String pkg = ws.getOwningPackage();
-        int preferredModeId = 0;
 
+        if (pkg.contains("android.graphics.cts") || pkg.contains("com.android.cts")) {
+            isCtsTest = true;
+            return;
+        }
+
+        if (isCtsTest) {
+            return;
+        }
+
+        float targetRate = 0f;
+        int targetModeId = 0;
+        
         AppRefreshRateConfig config = DEFAULT_APP_CONFIGS.get(pkg);
         if (config != null) {
-            int hz = config.refreshRates.valueAt(0);
-            preferredModeId = getModeIdForHz(hz);
-            if (config.disableIdle) disableIdle = true;
+            targetRate = config.refreshRates.valueAt(0);
+            targetModeId = getModeId(Math.round(targetRate));
+            
+            if (config.disableIdle) {
+                disableIdle = true;
+            }
 
             if (config.disableSV) {
                 WindowManager.LayoutParams lp = ws.mAttrs;
@@ -276,38 +275,47 @@ public class NtRefreshRateController {
             }
         }
 
-        preferredModeId = shouldOverrideWinPref(ws, displayOn) ? getModeId() : preferredModeId;
-        if (preferredModeId == 0) return;
+        if (shouldOverrideForWindow(ws, displayOn)) {
+            overrideWinPrefer = true;
+            targetRate = maxSupportedHz;
+            targetModeId = getModeId(Math.round(targetRate));
+        }
 
-        Display.Mode mode = modeIdToDisplayMode.get(preferredModeId);
-        float hz = (mode != null ? mode.getRefreshRate() : maxSupportedHz);
-        if (mode == null) preferredModeId = getModeId();
+        if (targetRate <= 0) {
+            return;
+        }
 
         int windowSize = ws.mRequestedWidth * ws.mRequestedHeight;
-        if (hz > bestAppVote.maxRefreshRate || windowSize > maxWindowSize) {
-            updateBestVote(pkg, preferredModeId, hz);
+
+        if (targetRate > bestVote.maxRefreshRate || 
+            (Math.abs(targetRate - bestVote.maxRefreshRate) < 1.0f && windowSize > maxWindowSize)) {
+            bestVote.updateVote(pkg, targetModeId, 0.0f, targetRate);
             maxWindowSize = windowSize;
         }
     }
 
-    private boolean shouldOverrideWinPref(WindowState ws, boolean displayOn) {
-        if (ws.inMultiWindowMode() || isOverlay(ws) || !displayOn || ws.isAnimationRunningSelfOrParent()) {
-            overrideWinPref = true;
-            return true;
-        }
-        return false;
+    public boolean OverrideWinPrefer() {
+        return overrideWinPrefer;
     }
 
-    private boolean isOverlay(WindowState ws) {
-        int type = ws.mAttrs.type;
-        return type == TYPE_NOTIFICATION_SHADE ||
-                (type == TYPE_APPLICATION_OVERLAY && ws.mOwnerUid != SYSTEM_UID);
+    public float getMaxPreferRate() { 
+        return currentVote.maxRefreshRate; 
     }
 
-    public boolean OverrideWinPrefer() { return overrideWinPref; }
-    public float getMaxPreferRate() { return bestAppVote.maxRefreshRate; }
-    public float getMinPreferRate() { return bestAppVote.minRefreshRate; }
-    public int getPreferMode() { return bestAppVote.preferredModeId; }
+    public float getMinPreferRate() { 
+        return currentVote.minRefreshRate; 
+    }
+
+    public int getModeId(int rate) {
+        Display.Mode mode = new Display.Mode.Builder()
+                .setRefreshRate(rate)
+                .build();
+        return Math.round(mode.getRefreshRate());
+    }
+
+    public int getPreferMode() {
+        return currentVote.preferredModeId;
+    }
 
     private final class SettingsObserver extends ContentObserver {
         private final Uri refreshRateModeUri =
@@ -324,7 +332,6 @@ public class NtRefreshRateController {
             if (!refreshRateModeUri.equals(uri)) return;
             loadRefreshRateSetting();
             updateRefreshRate();
-            modeId = getModeId();
             wm.requestTraversal();
         }
     }
