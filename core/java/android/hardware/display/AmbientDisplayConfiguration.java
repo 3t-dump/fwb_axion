@@ -115,8 +115,9 @@ public class AmbientDisplayConfiguration {
 
     /** @hide */
     public boolean pulseOnNotificationEnabled(int user) {
-        return (pulseOnNotificationEnabledOverride(user) && ambientDisplayAvailable())
-            || (boolSettingDefaultOn(Settings.Secure.DOZE_ENABLED, user) && pulseOnNotificationAvailable());
+        return pulseOnNotificationEnabledOverride(user) 
+                && ambientDisplayAvailable() 
+                && pulseOnNotificationAvailable();
     }
 
     /** @hide */
