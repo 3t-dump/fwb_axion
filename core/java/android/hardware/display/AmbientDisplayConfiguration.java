@@ -110,7 +110,7 @@ public class AmbientDisplayConfiguration {
 
     /** @hide */
     public boolean shouldPulseOnDoubleTap(int user) {
-        return boolSettingDefaultOff("doze_pulse_on_double_tap", user);
+        return boolSettingDefaultOff("doze_pulse_on_double_tap_ext", user);
     }
 
     /** @hide */
