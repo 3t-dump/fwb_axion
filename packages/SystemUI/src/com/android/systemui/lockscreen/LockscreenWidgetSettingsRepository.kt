@@ -32,7 +32,8 @@ data class WidgetSettings(
     val settings: String,
     val isEnabled: Boolean,
     val isNight: Boolean,
-    val theme: Int
+    val theme: Int,
+    val density: Float
 )
 
 class LockscreenWidgetSettingsRepository(
@@ -40,29 +41,33 @@ class LockscreenWidgetSettingsRepository(
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
 
-    val settings: WidgetSettings get() {
-        val settings = Settings.System.getStringForUser(
-            contentResolver,
-            "lockscreen_widgets_extras",
-            UserHandle.USER_CURRENT
-        ) ?: ""
+    val settings: WidgetSettings 
+        get() {
+            val resources = context.resources
+            val density = resources.displayMetrics.density
 
-        val isEnabled = Settings.System.getIntForUser(
-            contentResolver,
-            "lockscreen_widgets_enabled",
-            0,
-            UserHandle.USER_CURRENT
-        ) == 1
+            val settings = Settings.System.getStringForUser(
+                contentResolver,
+                "lockscreen_widgets_extras",
+                UserHandle.USER_CURRENT
+            ) ?: ""
 
-        val isNight = (context.resources.configuration.uiMode and
-                Configuration.UI_MODE_NIGHT_MASK) ==
-                Configuration.UI_MODE_NIGHT_YES
+            val isEnabled = Settings.System.getIntForUser(
+                contentResolver,
+                "lockscreen_widgets_enabled",
+                0,
+                UserHandle.USER_CURRENT
+            ) == 1
 
-        val darkColorActive = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_ADARK)
-        val lightColorActive = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_ALIGHT)
+            val isNight = (resources.configuration.uiMode and
+                    Configuration.UI_MODE_NIGHT_MASK) ==
+                    Configuration.UI_MODE_NIGHT_YES
 
-        val theme = 31 * darkColorActive + lightColorActive
+            val darkColorActive = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_ADARK)
+            val lightColorActive = ContextCompat.getColor(context, LsWidgetsRes.COLOR_BG_ALIGHT)
 
-        return WidgetSettings(settings, isEnabled, isNight, theme)
-    }
+            val theme = 31 * darkColorActive + lightColorActive
+
+            return WidgetSettings(settings, isEnabled, isNight, theme, density)
+        }
 }

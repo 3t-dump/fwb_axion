@@ -30,7 +30,6 @@ class LsWidgetsCallbacksController(private val controller: LockScreenWidgetsCont
 
     val scrimUtils = object : ScrimUtils.ScrimEventListener {
         override fun onDozingChanged() {
-            controller.dozing = ScrimUtils.get().isDozing()
             controller.widgetButtons.forEach { (action, view) ->
                 controller.widgetFactory.updateWidgetState(view, action, controller.states.isActive(action))
             }

@@ -59,7 +59,6 @@ class LockScreenWidgetsController(
     private val container: FlexboxLayout = view.findViewById(R.id.main_widgets_container)
 
     var cameraId: String? = null
-    var dozing = false
     var isFlashOn = false
     var isRingerRegistered = false
 
@@ -68,6 +67,7 @@ class LockScreenWidgetsController(
     
     val scrimUtils get() = ScrimUtils.get()
     val bluetoothEnabled get() = BluetoothAdapter.getDefaultAdapter()?.isEnabled == true
+    val dozing get() = scrimUtils.isDozing()
 
     private var mainWidgets = mutableListOf<WidgetAction>()
     val widgetButtons = mutableMapOf<WidgetAction, LaunchableImageView>()
@@ -77,6 +77,7 @@ class LockScreenWidgetsController(
         runCatching {
             cameraId = cameraManager.cameraIdList.firstOrNull()
         }
+        updateSettings()
         scrimUtils.addListener(callbacks.scrimUtils)
         startListening()
     }
@@ -149,6 +150,7 @@ class LockScreenWidgetsController(
             val widgetView = widgetViewCache[action] ?: widgetFactory.createWidgetView(action).also {
                 widgetViewCache[action] = it
             }
+            widgetFactory.updateWidgetSize(widgetView)
             container.addView(widgetView)
             widgetButtons[action] = widgetView
         }

@@ -39,19 +39,17 @@ class WidgetFactory(
         (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
                 Configuration.UI_MODE_NIGHT_YES
 
+    private val Context.scaleRatio: Float
+        get() {
+            val displayMetrics = resources.displayMetrics
+            val sw = minOf(displayMetrics.widthPixels, displayMetrics.heightPixels) / displayMetrics.density
+            return sw / 420f
+        }
+
     fun createWidgetView(action: WidgetAction): LaunchableImageView {
         return LaunchableImageView(context).apply {
-            val widgetSize = context.resources.getDimensionPixelSize(LsWidgetsRes.WIDGET_CIRCLE_SIZE)
-            layoutParams = FlexboxLayout.LayoutParams(widgetSize, widgetSize).apply {
-                val spacing = context.resources.getDimensionPixelSize(LsWidgetsRes.WIDGET_MARGIN_HORIZONTAL)
-                setMargins(spacing, spacing, spacing, spacing)
-                flexGrow = 0f
-                flexShrink = 0f
-            }
-            val iconPadding = context.resources.getDimensionPixelSize(LsWidgetsRes.WIDGET_ICON_PADDING)
             isFocusable = true
             isClickable = true
-            setPadding(iconPadding, iconPadding, iconPadding, iconPadding)
             setBackgroundResource(getWidgetBackground(false))
             setImageResource(action.inactiveRes)
             setOnClickListener { action.onClick(controller) }
@@ -64,13 +62,26 @@ class WidgetFactory(
     fun updateWidgetState(view: LaunchableImageView, action: WidgetAction, active: Boolean) {
         view.setImageResource(if (active) action.activeRes else action.inactiveRes)
         view.setBackgroundResource(getWidgetBackground(active))
-
         if (!controller.dozing) {
             setTint(view, active)
         } else {
             view.backgroundTintList = null
-            view.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(context, android.R.color.white))
+            view.imageTintList =
+                ColorStateList.valueOf(ContextCompat.getColor(context, android.R.color.white))
         }
+    }
+
+    fun updateWidgetSize(view: LaunchableImageView) {
+        val scaleRatio = context.scaleRatio
+        val widgetSize = (context.resources.getDimensionPixelSize(LsWidgetsRes.WIDGET_CIRCLE_SIZE) * scaleRatio).toInt()
+        val spacing = (context.resources.getDimensionPixelSize(LsWidgetsRes.WIDGET_MARGIN_HORIZONTAL) * scaleRatio).toInt()
+        val iconPadding = (context.resources.getDimensionPixelSize(LsWidgetsRes.WIDGET_ICON_PADDING) * scaleRatio).toInt()
+        view.layoutParams = FlexboxLayout.LayoutParams(widgetSize, widgetSize).apply {
+            setMargins(spacing, spacing, spacing, spacing)
+            flexGrow = 0f
+            flexShrink = 0f
+        }
+        view.setPadding(iconPadding, iconPadding, iconPadding, iconPadding)
     }
 
     private fun setTint(view: LaunchableImageView, active: Boolean) {
