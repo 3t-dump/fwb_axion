@@ -112,6 +112,7 @@ import com.android.systemui.statusbar.policy.SplitShadeStateController;
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
 import com.android.systemui.util.LargeScreenUtils;
 import com.android.systemui.util.NTAppLockerHelper;
+import com.android.systemui.util.NTCpuBindController;
 import com.android.systemui.util.kotlin.JavaAdapter;
 import com.android.systemui.utils.windowmanager.WindowManagerProvider;
 
@@ -1994,6 +1995,7 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
             traceQsJank(false, false);
             return;
         }
+        boost(type == FLING_EXPAND);
         mShadeLog.flingQs(type, isClick);
         float target;
         switch (type) {
@@ -2577,5 +2579,12 @@ public class QuickSettingsControllerImpl implements QuickSettingsController, Dum
 
     public boolean isVisible() {
         return mVisible;
+    }
+    
+    public static void boost(boolean enabled) {
+        NTCpuBindController cpuBindController = NTCpuBindController.INSTANCE();
+        cpuBindController.setLimitOtherProcessCpu(enabled);
+        cpuBindController.setLimitForegroundAppCpu(enabled);
+        cpuBindController.animationBoost(NTCpuBindController.REQUEST_ANIMATION_BOOST_TYPE_SPEED_UP_QS_EXPANSION_ANIMATION, enabled);
     }
 }
