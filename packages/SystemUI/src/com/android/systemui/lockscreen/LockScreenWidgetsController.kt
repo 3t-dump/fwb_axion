@@ -117,6 +117,11 @@ class LockScreenWidgetsController(
 
     private fun addListeners() {
         if (listening) return
+        addListener(
+            key = "configurationListener",
+            register = { configurationController.addCallback(callbacks.configurationListener) },
+            unregister = { configurationController.removeCallback(callbacks.configurationListener) }
+        )
         widgetList.forEach { widget ->
             widget.registerCallback(this)
             listeners["widget_${widget.name}"] = {
@@ -154,6 +159,7 @@ class LockScreenWidgetsController(
             container.addView(widgetView)
             widgetButtons[action] = widgetView
         }
+        callbacks.updateWidgets()
         updateWidgetsVisibility()
     }
 

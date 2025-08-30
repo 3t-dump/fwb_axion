@@ -28,11 +28,18 @@ class LsWidgetsCallbacksController(private val controller: LockScreenWidgetsCont
 
     val wifiInfo: WifiCallbackInfo get() = wifiCallbackInfo
 
+    val configurationListener = object : ConfigurationController.ConfigurationListener {
+        override fun onUiModeChanged() {
+            controller.updateWidgetViews()
+        }
+        override fun onThemeChanged() {
+            controller.updateWidgetViews()
+        }
+    }
+
     val scrimUtils = object : ScrimUtils.ScrimEventListener {
         override fun onDozingChanged() {
-            controller.widgetButtons.forEach { (action, view) ->
-                controller.widgetFactory.updateWidgetState(view, action, controller.states.isActive(action))
-            }
+            updateWidgets()
         }
         override fun onKeyguardShowingChanged(showing: Boolean) {
             controller.updateSettings()
@@ -134,5 +141,11 @@ class LsWidgetsCallbacksController(private val controller: LockScreenWidgetsCont
             controller.states.updateHotspot()
         }
         override fun onHotspotAvailabilityChanged(available: Boolean) {}
+    }
+    
+    fun updateWidgets() {
+        controller.widgetButtons.forEach { (action, view) ->
+            controller.widgetFactory.updateWidgetState(view, action, controller.states.isActive(action))
+        }
     }
 }
